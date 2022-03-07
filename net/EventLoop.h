@@ -7,6 +7,7 @@
 #include <vector>
 #include <boost/any.hpp>
 #include "Mutex.h"
+#include "BufferPool.h"
 #include "CurrentThread.h"
 #include "Timestamp.h"
 #include "TimerId.h"
@@ -67,6 +68,17 @@ class EventLoop : noncopyable {
   boost::any* getMutableContext() {
       return &context_;
   }
+
+  BufferBlock* allocate() {
+      if(isInLoopThread()) {
+          return bufferPool_->allocate();
+      }
+      return NULL;
+  }
+  void free(BufferBlock* block) {
+      bufferPool_->free(block);
+  }
+
   static EventLoop* getEventLoopOfCurrentThread();
 
  private:
@@ -82,6 +94,7 @@ class EventLoop : noncopyable {
   std::unique_ptr<TimerQueue> timerqueue_;
   int wakeupfd_;
   std::unique_ptr<Channel> wakeupchannel_;
+  std::unique_ptr<BufferPool> bufferPool_;
   
   boost::any context_;
   ChannelList activechannels_;

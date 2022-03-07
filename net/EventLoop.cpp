@@ -40,7 +40,8 @@ EventLoop::EventLoop()
       epoller_(new Poller(this)),
       timerqueue_(new TimerQueue(this)),
       wakeupfd_(createEventfd()),
-      wakeupchannel_(new Channel(this, wakeupfd_)) {
+      wakeupchannel_(new Channel(this, wakeupfd_)),
+      bufferPool_(new BufferPool()) {
     if(t_loopInThisThread)
         LOG_FATAL << "Another loop is in this thread";
     else

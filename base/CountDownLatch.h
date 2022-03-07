@@ -13,6 +13,9 @@ class CountDownLatch : noncopyable {
   void wait();
   void countDown();
   int getCount() const;
+  void setCount(int count) {
+      count_ = count;
+  }
  
  private:
   //互斥锁

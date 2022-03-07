@@ -14,6 +14,7 @@ set(NET_SRCS
   TcpServer.cpp
   Timer.cpp
   TimerQueue.cpp
+  BufferPool.cpp
 )
 
 include_directories(./)
@@ -47,3 +48,6 @@ target_link_libraries(EchoServer_test netlib_net)
 
 add_executable(EchoClient_test ./test/EchoClient_test.cpp)
 target_link_libraries(EchoClient_test netlib_net)
+
+add_executable(BufferPool_test ./test/BufferPool_test.cpp)
+target_link_libraries(BufferPool_test netlib_net)
