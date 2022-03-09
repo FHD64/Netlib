@@ -9,15 +9,11 @@ namespace netlib {
 namespace net {
 
 //对齐BufferBlock
-#if __SIZEOF_POINTER__ == 4
-const uint16_t blockSize = 1024;
-#elif __SIZEOF_POINTER__ == 8
-const uint16_t blockSize = 1024+64-16;
-#endif
+const size_t blockSize = 1024;
 
 struct BufferBlock {
     struct BufferBlock* next;
-    uint16_t usage;
+    struct BufferBlock* prev;
     char buff[blockSize];
 };
 

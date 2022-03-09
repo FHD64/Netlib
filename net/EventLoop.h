@@ -76,6 +76,9 @@ class EventLoop : noncopyable {
       return NULL;
   }
   void free(BufferBlock* block) {
+      if(!block) {
+          return;
+      }
       bufferPool_->free(block);
   }
 

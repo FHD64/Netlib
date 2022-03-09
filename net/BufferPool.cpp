@@ -21,6 +21,8 @@ BufferBlock* BufferPool::allocate() {
     if(head_) {
         BufferBlock* temp = head_;
         head_ = head_->next;
+        temp->next = NULL;
+        temp->prev = NULL;
         return temp;
     }
 

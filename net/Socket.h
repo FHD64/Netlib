@@ -4,6 +4,7 @@
 #include "noncopyable.h"
 #include "Logger.h"
 #include "InetAddress.h"
+#include "Buffer.h"
 #include <netinet/tcp.h>
 #include <netinet/in.h>
 

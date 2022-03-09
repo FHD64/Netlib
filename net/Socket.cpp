@@ -1,5 +1,6 @@
 #include "Socket.h"
 #include "Logger.h"
+#include "Buffer.h"
 #include <sys/socket.h>
 
 using namespace netlib;
@@ -37,7 +38,7 @@ struct sockaddr_in6 Socket::getLocalAddr(int sockfd) {
     return localaddr;
 }
 
- bool Socket::isSelfConnect(int sockfd) {
+bool Socket::isSelfConnect(int sockfd) {
     struct sockaddr_in6 localaddr = getLocalAddr(sockfd);
     struct sockaddr_in6 peeraddr = getPeerAddr(sockfd);
     if (localaddr.sin6_family == AF_INET) {

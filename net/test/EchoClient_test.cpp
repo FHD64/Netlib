@@ -45,16 +45,20 @@ class EchoClient : noncopyable {
   }
 
   void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
-      string msg(buf->retrieveAsString());
-      LOG_TRACE << conn->name() << " recv " << msg.size() << " bytes at " << msg;
-      if (msg == "quit\n") {
+      size_t len = buf->readableBytes();
+      char* msg = reinterpret_cast<char*>(malloc(sizeof(char) * len + 1));
+      buf->copyToUser(msg, len);
+      msg[len] = '\0';
+      LOG_TRACE << conn->name() << " recv " << len << " bytes at " << msg;
+      if (!strcmp(msg, "exit\n")) {
           conn->send("bye\n");
           conn->shutdown();
-      } else if (msg == "shutdown\n") {
+      } else if (!strcmp(msg, "shutdown\n")) {
           loop_->quit();
       } else {
           conn->send(msg);
       }
+      free(msg);
   }
 
   EventLoop* loop_;

@@ -2,9 +2,12 @@
 #define __NET_BUFFER__
 
 #include "StringPiece.h"
+#include "BufferPool.h"
+#include "EventLoop.h"
 #include <algorithm>
 #include <vector>
 #include <string.h>
+#include <sys/uio.h>
 
 // TODO: 后续可优化为链式缓存
 
@@ -12,129 +15,197 @@ namespace netlib {
 
 namespace net {
 
-//当前缓存由vectoc<char>组成，总共将缓存分为三部分
-//1.前缀:在Buffer前留出冗余空间，以增添数据头
-//2.可读部分：通过readidx指示可读部分的第一个字节，读出数据后readidx++
-//3.可写部分：通过writeidx指示可写部分的第一个字节，写入数据后wirteidx++
-//
-//****************缓存空间示意******************/
-//+-前缀-+--------可读部分--------+---可写部分----+
-//    readidx                 writeidx
-//
-//****************缓存存放机制******************/
-//1.通过移动数据释放可用空间
-//2.通过vector.resize申请vector空间
-//3.提供接口直接解析Buffer，避免用户通过二次复制浪费性能
-//4.read接口为系统调用，为了减少系统调用次数且与内存使用之间取得平衡，
+struct BufferIterator : public boost::equality_comparable<BufferIterator>,
+                    public boost::less_than_comparable<BufferIterator> {
+ BufferBlock* buff_;
+ size_t pos_;
+ BufferIterator()
+       : buff_(NULL),
+         pos_(0){
+ }
+ BufferIterator(BufferBlock* buff, size_t pos)
+       : buff_(buff),
+         pos_(pos){
+ }
+ BufferIterator& operator++() {
+     if(pos_ == blockSize - 1) {
+         if(buff_->next) {
+             buff_ = buff_->next;
+             pos_ = 0;
+         } else {
+             pos_ = blockSize;
+         }
+     } else {
+         pos_++;
+     }
+     return *this;
+ }
+ BufferIterator& operator--() {
+     if(pos_ == 0) {
+         if(buff_->prev) {
+             buff_ = buff_->prev;
+             pos_ = blockSize - 1;
+         }
+     } else {
+         pos_--;
+     }
+     return *this;
+ }
+ char& operator*() {
+     return buff_->buff[pos_];
+ }
+};
+
+inline bool operator==(const BufferIterator it1, const BufferIterator it2) {
+    if(it1.buff_ == it2.buff_ && it1.pos_ == it2.pos_) {
+        return true;
+    } else {
+        return false;
+    }
+}
+BufferIterator operator-(BufferIterator it, int dis);
+BufferIterator operator+(BufferIterator it, int dis);
+inline BufferIterator& operator+=(BufferIterator& it, int dis) {
+    it = it + dis;
+    return it;
+}
+inline BufferIterator& operator-=(BufferIterator& it, int dis) {
+    it = it - dis;
+    return it;
+}
+inline BufferIterator& operator+=(BufferIterator& it, size_t dis) {
+    it = it + static_cast<int>(dis);
+    return it;
+}
+inline BufferIterator& operator-=(BufferIterator& it, ssize_t dis) {
+    it = it - static_cast<int>(dis);
+    return it;
+}
+inline BufferIterator operator-(BufferIterator it, size_t dis) {
+    it = it - static_cast<int>(dis);
+    return it;
+}
+inline BufferIterator operator+(BufferIterator it, size_t dis) {
+    it = it - static_cast<int>(dis);
+    return it;
+}
+
+bool operator<(BufferIterator it1, BufferIterator it2);
+size_t operator-(BufferIterator it1, BufferIterator it2);
+
 
 class Buffer {
  public:
-  //前方预留10字节空间
-  static const int kprepend = 10;
-  static const int kinitsize = 1024;
-  explicit Buffer(size_t initsize = kinitsize)
-    : buffer_(kprepend + kinitsize),
-      readidx_(kprepend),
-      writeidx_(kprepend) {
+  explicit Buffer(EventLoop* loop, size_t initsize = blockSize)
+    : loop_(loop),
+      head_(loop_->allocate()),
+      tail_(head_),
+      readIt_(head_, 0),
+      writeIt_(head_, 0) {
+          head_->prev = NULL;
+          int need = static_cast<int>((initsize + blockSize - 1) / blockSize);
+          size_ = static_cast<size_t>(need * blockSize);
+          for(int i = 0; i < need - 1; i++) {
+              BufferBlock* block = loop_->allocate();
+              insertTail(block);
+          }
+  }
+  ~Buffer();
+  BufferIterator begin() {
+      return readIt_;
+  }
+  BufferIterator end() {
+      return writeIt_;
+  }
+  size_t readableBytes() {
+      return writeIt_ - readIt_;
+  }
+  size_t writeableBytes() {
+      return BufferIterator(tail_, blockSize) - writeIt_;
   }
 
-  //当前Buffer内存实现通过vector实现，而非动态分配内存，可以考虑不实现
-  //拷贝构造、移动构造、拷贝赋值、移动赋值函数而仅实现swap函数
-  void swap(Buffer& rhs) {
-      buffer_.swap(rhs.buffer_);
-      std::swap(readidx_, rhs.readidx_);
-      std::swap(writeidx_, rhs.writeidx_);
-  }
-  
-  size_t readableBytes() const {
-      return writeidx_ - readidx_;
-  }
-  size_t writeableBytes() const {
-      return buffer_.size() - writeidx_;
-  }
-  size_t prependBytes() const {
-      return readidx_;
-  }
-
-  const char* peek() const {
-      return begin() + readidx_;
-  }
-
-  //清空Buffer
   void retrieve() {
-      readidx_ = kprepend;
-      writeidx_ = kprepend;
+      readIt_.buff_ = head_;
+      readIt_.pos_ = 0;
+      writeIt_.buff_ = head_;
+      writeIt_.pos_ = 0;
   }
-  void retrieveBytes(size_t len) {
-      if(len > readableBytes())
-          retrieve();
-      readidx_ += len;
-  }
-  string retrieveAsString() {
-      string result(peek(), readableBytes());
-      retrieve();
-      return result;
-  }
-  string retrieveBytesAsString(size_t len) {
-      if(len > readableBytes())
-          return retrieveAsString();
+  void retrieveBytes(size_t len);
 
-      string result(peek(), len);
-      retrieveBytes(len);
-      return result;
-  }
-  StringPiece retrieveAsStringPiece() {
-      return StringPiece(peek(), static_cast<int>(readableBytes()));
-  }
-  
+  size_t copyToUser(char* dest, size_t destLen);
   //写入Buffer
-  void append(const char* data, size_t len) {
-      if(writeableBytes() < len)
-          makeSpace(len);
-      std::copy(data, data + len, begin() + writeidx_);
-      writeidx_ += len;
-  }
+  void append(const char* data, size_t len);
   void append(const StringPiece& str) {
       append(str.data(), str.size());
   }
   void append(const void* data, size_t len) {
       append(static_cast<const char*>(data), len);
   }
-
-  //设置头前缀
-  int setPrepend(const void* data, size_t len) {
-      if(len > prependBytes())
-          return -1;
-
-      readidx_ -= len;
-      const char* d = static_cast<const char*>(data);
-      std::copy(d, d + len, begin() + readidx_);
-      return 0;
-  }
   
-  void shrink(size_t reserve) {
-      size_t r = readableBytes() + reserve + kprepend;
-      Buffer newbuf(r > kinitsize ? r : kinitsize);
-      newbuf.append(retrieveAsStringPiece());
-      swap(newbuf);
-  }
+  void shrink(size_t reserve);
   //读取fd存至缓存区
   ssize_t readFd(int fd, int* savedErrno);
-
+  ssize_t writeFd(int fd);
+  
  private:
-  const char* begin() const {
-      return &(*buffer_.begin());
+  const static int maxIov = 10;
+
+  BufferBlock* removeHead() {
+      BufferBlock* temp = head_;
+      if(head_ == tail_) {
+          head_ = NULL;
+          tail_ = NULL;
+      } else {
+          head_->next->prev = NULL;
+          head_ = head_->next;
+          temp->next = NULL;
+          temp->prev = NULL;
+      }
+      return temp;
   }
-  char* begin() {
-      return &(*buffer_.begin());
+
+  BufferBlock* removeTail() {
+      BufferBlock* temp = tail_;
+      if(head_ == tail_) {
+          head_ = NULL;
+          tail_ = NULL;
+      }else {
+          tail_->prev->next = NULL;
+          tail_ = tail_->prev;
+      }
+      return temp;
   }
+
+  void insertTail(BufferBlock* block) {
+      if(!block) {
+          return;
+      }
+      if(!tail_) {
+          tail_ = block;
+          head_ = block;
+          tail_->prev = NULL;
+          tail_->next = NULL;
+      }else {
+          block->next = NULL;
+          block->prev = tail_;
+          tail_->next = block;
+          tail_ = block;
+      }
+  }
+
   void makeSpace(size_t len);
-  std::vector<char> buffer_;
-  size_t readidx_;
-  size_t writeidx_;
+  size_t makeIov(int* iovsize, BufferIterator begin, BufferIterator end);
+  EventLoop* loop_;
+  BufferBlock* head_;
+  BufferBlock* tail_;
+  size_t size_;
+  BufferIterator readIt_;
+  BufferIterator writeIt_;
+  struct ::iovec iov_[maxIov];
 };
 
 }
 }
+
 
 #endif

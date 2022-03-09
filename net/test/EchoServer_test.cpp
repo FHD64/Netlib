@@ -44,16 +44,20 @@ class EchoServer {
   }
 
   void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
-    string msg(buf->retrieveAsString());
-    LOG_TRACE << conn->name() << " recv " << msg.size() << " bytes at " << msg;
-    if (msg == "exit\n") {
-        conn->send("bye\n");
-        conn->shutdown();
-    }
-    if (msg == "quit\n") {
-      loop_->quit();
-    }
-    conn->send(msg);
+      size_t len = buf->readableBytes();
+      char* msg = reinterpret_cast<char*>(malloc(sizeof(char) * len + 1));
+      buf->copyToUser(msg, len);
+      msg[len] = '\0';
+      LOG_TRACE << conn->name() << " recv " << len << " bytes at " << msg;
+      if (!strcmp(msg, "exit\n")) {
+          conn->send("bye\n");
+          conn->shutdown();
+      }
+      if (!strcmp(msg, "quit\n")) {
+        loop_->quit();
+      }
+      conn->send(msg);
+      free(msg);
   }
 
   EventLoop* loop_;

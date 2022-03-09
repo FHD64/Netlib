@@ -36,7 +36,9 @@ TcpConnection::TcpConnection(EventLoop* loop, const string& name, int fd, const 
               localAddr_(localAddr),
               peerAddr_(peerAddr),
               //64KB
-              highWaterMark_(64 * 1024 * 1024) {
+              highWaterMark_(64 * 1024 * 1024),
+              inputBuffer_(loop_),
+              outputBuffer_(loop_) {
     channel_->setReadCallback(std::bind(&TcpConnection::handleRead, this));
     channel_->setWriteCallback(std::bind(&TcpConnection::handleWrite, this));
     channel_->setCloseCallback(std::bind(&TcpConnection::handleClose, this));
@@ -84,18 +86,6 @@ void TcpConnection::send(const StringPiece& message) {
     }
 }
 
-void TcpConnection::send(Buffer* buf) {
-    if(state_ == kConnected) {
-        if(loop_->isInLoopThread()) {
-            sendInLoop(buf->peek(), buf->readableBytes());
-            buf->retrieve();
-        } else {
-            void (TcpConnection::*fp)(const StringPiece& message) = &TcpConnection::sendInLoop;
-            loop_->runInLoop(std::bind(fp, this, buf->retrieveAsString()));
-        }
-    }
-}
-
 void TcpConnection::send(const void* data, int len) {
     send(StringPiece(static_cast<const char*>(data), len));
 }
@@ -110,6 +100,7 @@ void TcpConnection::sendInLoop(const void* data, size_t len) {
         return;
     }
 
+    //尝试直接写入
     if(!channel_->isWriting() && outputBuffer_.readableBytes() == 0) {
         nwrote = ::write(channel_->fd(), data, len);
         if(nwrote >= 0) {
@@ -238,7 +229,7 @@ void TcpConnection::handleRead() {
 
 void TcpConnection::handleWrite() {
     if(channel_->isWriting()) {
-        ssize_t n =::write(channel_->fd(), outputBuffer_.peek(), outputBuffer_.readableBytes());
+        ssize_t n = outputBuffer_.writeFd(channel_->fd());
 
         if(n > 0) {
             outputBuffer_.retrieveBytes(n);
