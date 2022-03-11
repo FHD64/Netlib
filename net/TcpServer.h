@@ -73,6 +73,7 @@ class TcpServer : noncopyable {
   std::atomic<bool> started_;
   int nextid_;
   Connections connections_;
+  Mutex mutex_;
 };
 }
 }

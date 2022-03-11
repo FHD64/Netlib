@@ -9,7 +9,7 @@ namespace netlib {
 namespace net {
 
 //对齐BufferBlock
-const size_t blockSize = 1024;
+const size_t blockSize = 2048;
 
 struct BufferBlock {
     struct BufferBlock* next;

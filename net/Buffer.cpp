@@ -1,4 +1,5 @@
 #include "Buffer.h"
+#include "Logger.h"
 #include <errno.h>
 #include <unistd.h>
 #include<cstring>
@@ -36,7 +37,10 @@ BufferIterator operator+(BufferIterator it, int dis) {
         it -= -dis;
         return it;
     }
-
+    if(it.buff_->next && it.pos_ == blockSize) {
+        it.buff_ = it.buff_->next;
+        it.pos_ = 0;
+    }
     size_t remain = static_cast<size_t>(dis);
     while(it.buff_ && remain != 0) {
         if((blockSize - it.pos_) > remain) {
@@ -102,14 +106,13 @@ void Buffer::makeSpace(size_t len) {
     }
     
     size_t expansion = (len - writeableBytes() + blockSize - 1) & (~(blockSize - 1));
-    bool exp = expansion > 0 ? true : false;
+    if(size_ < 16 * 1024) {
+        expansion = expansion > size_ ? expansion : size_;
+    }
+    size_ += expansion;
     while (expansion > 0) {
         insertTail(loop_->allocate());
         expansion -= blockSize;
-    }
-    if((writeIt_.pos_ == blockSize) && exp) {
-        writeIt_.pos_ = 0;
-        writeIt_.buff_ = writeIt_.buff_->next;
     }
 }
 
@@ -209,25 +212,39 @@ void Buffer::append(const char* data, size_t dataLen) {
         it += static_cast<int>(end - start);
     }
     writeIt_ += len;
+    appendsize_ += len;
+}
+
+void Buffer::append(BufferIterator begin, BufferIterator end) {
+    size_t dataLen = end - begin;
+    if(writeableBytes() < dataLen)
+        makeSpace(dataLen);
+    
+    BufferIterator it = begin;
+    while(it < end) {
+        size_t len = 0;
+        if(it.buff_ == end.buff_) {
+            append(it.buff_->buff + it.pos_, end.pos_ - it.pos_);
+            len = end.pos_ - it.pos_;
+        } else {
+            append(it.buff_->buff + it.pos_, blockSize - it.pos_);
+            len = blockSize - it.pos_;
+        }
+        it += len;
+    }
 }
 
 void Buffer::retrieveBytes(size_t bytes) {
     if(bytes >= readableBytes()) {
         retrieve();
+        return;
     }
 
-    size_t len = 0;
-    while(len < bytes) {
-        if(blockSize - readIt_.pos_ < bytes - len) {
-            readIt_.buff_ = readIt_.buff_->next;
-            readIt_.pos_ = 0;
-            insertTail(removeHead());
-            len += blockSize - readIt_.pos_;
-        } else {
-            readIt_ += bytes - len;
-            break;
-        }
+    readIt_ += bytes;
+    if(readIt_.buff_ != head_) {
+        insertTail(removeHead());
     }
+    retrievesize_ += bytes;
 }
 
 void Buffer::shrink(size_t reserve) {

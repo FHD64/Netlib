@@ -41,6 +41,10 @@ void TcpServer::start() {
     }
 }
 
+void TcpServer::newConnectionInLoop(EventLoop* loop, int sockfd, const InetAddress& peeraddr) {
+    
+}
+
 void TcpServer::newConnection(int sockfd, const InetAddress& peeraddr) {
     EventLoop* ioloop = threadpool_->getLoop();
     char buf[64];

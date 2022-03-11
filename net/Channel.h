@@ -66,7 +66,7 @@ class Channel : noncopyable {
       update();
   }
   void disableWriting() {
-      events_ &= kWriteEvent;
+      events_ &= ~kWriteEvent;
       update();
   }
   void disableAll() {

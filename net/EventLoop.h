@@ -73,13 +73,19 @@ class EventLoop : noncopyable {
       if(isInLoopThread()) {
           return bufferPool_->allocate();
       }
+      //MutexLock lock(&bufferMutex_);
       return NULL;
   }
   void free(BufferBlock* block) {
       if(!block) {
           return;
       }
-      bufferPool_->free(block);
+     // if(isInLoopThread()) {
+          bufferPool_->free(block);
+          return;
+      //}
+      //MutexLock lock(&bufferMutex_);
+      //bufferPool_->free(block);
   }
 
   static EventLoop* getEventLoopOfCurrentThread();

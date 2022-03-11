@@ -4,6 +4,7 @@
 #include "StringPiece.h"
 #include "EventLoop.h"
 
+#include <iostream>
 using namespace netlib;
 using namespace netlib::net;
 namespace netlib {
@@ -90,6 +91,27 @@ void TcpConnection::send(const void* data, int len) {
     send(StringPiece(static_cast<const char*>(data), len));
 }
 
+void TcpConnection::sendInLoopAndFree(const void* data, size_t len) {
+    sendInLoop(data, len);
+    free(reinterpret_cast<char*>(const_cast<void*>(data)));
+}
+
+void TcpConnection::send(Buffer* message) {
+    if(state_ == kConnected) {
+        if(loop_->isInLoopThread()) {
+            sendInLoop(message);
+            message->retrieve();
+        } else {
+            size_t len = message->readableBytes();
+            char *msg = reinterpret_cast<char*>(malloc(sizeof(char) * len));
+            message->copyToUser(msg, len);
+            void (TcpConnection::*fp)(const void* data, size_t len) = &TcpConnection::sendInLoopAndFree;
+            loop_->runInLoop(std::bind(fp, this, msg, len));
+            message->retrieve();
+        }
+    }
+}
+
 void TcpConnection::sendInLoop(const void* data, size_t len) {
     ssize_t nwrote = 0;
     size_t nremain = len;
@@ -129,6 +151,52 @@ void TcpConnection::sendInLoop(const void* data, size_t len) {
         }
 
         outputBuffer_.append(static_cast<const char*>(data) + nwrote, nremain);
+        if(!channel_->isWriting()) {
+            channel_->enableWriting();
+        }
+    }
+}
+
+void TcpConnection::sendInLoop(Buffer* data) {
+    ssize_t nwrote = 0;
+    size_t len = data->readableBytes();
+    size_t nremain = len;
+    bool fatalerror = false;
+
+    if(state_ == kDisconnected) {
+        LOG_WARN << "disconnected, cann't write data";
+        return;
+    }
+
+    //尝试直接写入
+    if(!channel_->isWriting() && outputBuffer_.readableBytes() == 0) {
+        nwrote = data->writeFd(channel_->fd());
+        if(nwrote >= 0) {
+            nremain = len - nwrote;
+            if(nremain == 0 && writeCompleteCallback_) {
+                loop_->queueInLoop(std::bind(writeCompleteCallback_, shared_from_this()));
+            }
+        }else {
+            nwrote = 0;
+            if(errno != EWOULDBLOCK) {
+                LOG_SYSERR << "TcpConnection::sendInLoop";
+                if(errno == EPIPE || errno == ECONNRESET) {
+                    fatalerror = true;
+                }
+            }
+        }
+    }
+
+    //若当前未一次性写完
+    if(!fatalerror && nremain > 0) {
+        size_t oldlen = outputBuffer_.readableBytes();
+        if(oldlen + nremain >= highWaterMark_
+           && oldlen < highWaterMark_
+           && highWaterMarkCallback_) {
+               loop_->queueInLoop(std::bind(highWaterMarkCallback_, shared_from_this(), oldlen + nremain));
+        }
+
+        outputBuffer_.append(data->begin()+static_cast<size_t>(nwrote), data->end());
         if(!channel_->isWriting()) {
             channel_->enableWriting();
         }

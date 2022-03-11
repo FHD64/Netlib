@@ -97,14 +97,14 @@ class TcpConnection : noncopyable,
 
  private:
 
-  enum stateE{
+  enum stateE {
       kDisconnected,
       kDisconnecting,
       kConnected,
       kConnecting
   };
   const string name_;
-  EventLoop *loop_;
+  EventLoop* loop_;
   stateE state_;
   bool reading_;
   std::unique_ptr<Socket> socket_;
@@ -129,7 +129,9 @@ class TcpConnection : noncopyable,
   void handleClose();
   void handleError();
   void sendInLoop(const StringPiece& message);
+  void sendInLoop(Buffer* message);
   void sendInLoop(const void* message, size_t len);
+  void sendInLoopAndFree(const void* data, size_t len);
   void startReadInLoop();
   void stopReadInLoop();
   const char* stateToString() const;

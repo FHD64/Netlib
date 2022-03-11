@@ -101,7 +101,9 @@ class Buffer {
       head_(loop_->allocate()),
       tail_(head_),
       readIt_(head_, 0),
-      writeIt_(head_, 0) {
+      writeIt_(head_, 0),
+      appendsize_(0),
+      retrievesize_(0) {
           head_->prev = NULL;
           int need = static_cast<int>((initsize + blockSize - 1) / blockSize);
           size_ = static_cast<size_t>(need * blockSize);
@@ -141,6 +143,7 @@ class Buffer {
   void append(const void* data, size_t len) {
       append(static_cast<const char*>(data), len);
   }
+  void append(BufferIterator begin, BufferIterator end);
   
   void shrink(size_t reserve);
   //读取fd存至缓存区
@@ -148,7 +151,7 @@ class Buffer {
   ssize_t writeFd(int fd);
   
  private:
-  const static int maxIov = 10;
+  const static int maxIov = 20;
 
   BufferBlock* removeHead() {
       BufferBlock* temp = head_;
@@ -202,6 +205,9 @@ class Buffer {
   BufferIterator readIt_;
   BufferIterator writeIt_;
   struct ::iovec iov_[maxIov];
+public:
+  size_t appendsize_;
+  size_t retrievesize_;
 };
 
 }

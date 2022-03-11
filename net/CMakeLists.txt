@@ -51,3 +51,9 @@ target_link_libraries(EchoClient_test netlib_net)
 
 add_executable(BufferPool_test ./test/BufferPool_test.cpp)
 target_link_libraries(BufferPool_test netlib_net)
+
+add_executable(PingPong_Client ./test/pingpong/PingPong_Client.cpp)
+target_link_libraries(PingPong_Client netlib_net)
+
+add_executable(PingPong_Server ./test/pingpong/PingPong_Server.cpp)
+target_link_libraries(PingPong_Server netlib_net)
