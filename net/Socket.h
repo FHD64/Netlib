@@ -26,6 +26,9 @@ class Socket : noncopyable {
   int fd() const {
       return fd_;
   }
+  void setFd(int fd) {
+      fd_ = fd;
+  }
   //sock操作接口
   void bind(const InetAddress& localaddr) {
       int ret = ::bind(fd_, localaddr.getSockAddr(), static_cast<socklen_t>(sizeof(struct sockaddr_in6)));
@@ -39,7 +42,12 @@ class Socket : noncopyable {
       }
   }
   int accpet(InetAddress* peeraddr);
-
+  void reset() {
+      if(::close(fd_) < 0) {
+          LOG_SYSERR << "sockets::close";
+      }
+      fd_ = 0;
+  }
   //提供部分sock配置选项设置
   void shutdownWrite() {
       if(::shutdown(fd_, SHUT_WR) < 0) {
@@ -71,7 +79,7 @@ class Socket : noncopyable {
   static struct sockaddr_in6 getLocalAddr(int sockfd);
   static struct sockaddr_in6 getPeerAddr(int sockfd);
  private:
-  const int fd_;
+   int fd_;
 };
 }
 }

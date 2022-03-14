@@ -51,7 +51,11 @@ class Channel : noncopyable {
   bool isNoneEvent() const {
       return events_ == kNoneEvent;
   }
-  
+  void reset();
+  void reset(EventLoop* loop, int fd) {
+      loop_ = loop;
+      fd_ = fd;
+  }
   //使能读写事件
   void enableReading() {
       events_ |= kReadEvent;
@@ -107,7 +111,7 @@ class Channel : noncopyable {
   std::weak_ptr<void> tie_;
   bool tied_;
 
-  const int fd_;
+  int fd_;
   
   //当前事件
   int events_;

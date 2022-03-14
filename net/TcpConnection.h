@@ -13,11 +13,11 @@
 #include "Timestamp.h"
 
 namespace netlib {
-
 namespace net {
 
 class EventLoop;
 using std::string;
+
 void defaultConnectionCallback(const TcpConnectionPtr& conn);
 void defaultMessageCallback(const TcpConnectionPtr& conn, Buffer* buffer);
 
@@ -76,6 +76,9 @@ class TcpConnection : noncopyable,
       socket_->setTcpNoDelay(on);
   }
 
+  //初始化连接
+  void init(EventLoop* loop, string& name, int sock, InetAddress& localAddr, InetAddress& peerAddr);
+
   //返回缓冲区内容
   Buffer* inputBuffer() {
       return &inputBuffer_;
@@ -94,23 +97,22 @@ class TcpConnection : noncopyable,
   void connectEstablished();
   void shutdown();
   void stopRead();
-
+  friend class TcpConnectionPool;
  private:
-
   enum stateE {
       kDisconnected,
       kDisconnecting,
       kConnected,
       kConnecting
   };
-  const string name_;
+  string name_;
   EventLoop* loop_;
   stateE state_;
   bool reading_;
   std::unique_ptr<Socket> socket_;
   std::unique_ptr<Channel> channel_;
-  const InetAddress localAddr_;
-  const InetAddress peerAddr_;
+  InetAddress localAddr_;
+  InetAddress peerAddr_;
   MessageCallback messageCallback_;
   ConnectionCallback connectionCallback_;
   CloseCallback closeCallback_;

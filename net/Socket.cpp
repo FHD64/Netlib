@@ -55,7 +55,7 @@ bool Socket::isSelfConnect(int sockfd) {
 }
 
 Socket::~Socket() {
-    if (::close(fd_) < 0) {
+    if ((fd_ > 0) && (::close(fd_) < 0)) {
         LOG_SYSERR << "sockets::close";
     }
 }

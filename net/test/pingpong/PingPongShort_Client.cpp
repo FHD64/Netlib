@@ -11,13 +11,15 @@
 
 #include <stdio.h>
 #include <unistd.h>
-
+#include <atomic>
 using namespace netlib;
 using namespace netlib::net;
 using namespace std::placeholders;
 
 class Client;
-
+int testnum = 0;
+std::atomic<int64_t> totalBytesRead(0);
+std::atomic<int64_t> totalMessagesRead(0);
 class Session : noncopyable {
  public:
   Session(EventLoop* loop,
@@ -122,19 +124,11 @@ class Client : noncopyable
     {
       LOG_WARN << "all disconnected";
 
-      int64_t totalBytesRead = 0;
-      int64_t totalMessagesRead = 0;
       for (const auto& session : sessions_)
       {
         totalBytesRead += session->bytesRead();
         totalMessagesRead += session->messagesRead();
       }
-      LOG_WARN << totalBytesRead << " total bytes read";
-      LOG_WARN << totalMessagesRead << " total messages read";
-      LOG_WARN << static_cast<double>(totalBytesRead) / static_cast<double>(totalMessagesRead)
-               << " average message size";
-      LOG_WARN << static_cast<double>(totalBytesRead) / (timeout_ * 1024 * 1024)
-               << " MiB/s throughput";
       conn->getLoop()->queueInLoop(std::bind(&Client::quit, this));
     }
   }
@@ -188,10 +182,21 @@ int main(int argc, char* argv[])
     int blockSize = atoi(argv[3]);
     int sessionCount = atoi(argv[4]);
     int timeout = atoi(argv[5]);
-
+    int testtime = atoi(argv[6]);
+    testnum = testtime / timeout;
     EventLoop loop;
     InetAddress serverAddr("0.0.0.0", port);
-
-    Client client(&loop, serverAddr, blockSize, sessionCount, timeout, threadCount);
-    loop.loop();
+    Timestamp begin(Timestamp::now());
+    while(testnum) {
+        Client client(&loop, serverAddr, blockSize, sessionCount, timeout, threadCount);
+        loop.loop();
+        testnum--;
+    }
+      LOG_WARN << totalBytesRead.load() << " total bytes read";
+      LOG_WARN << totalMessagesRead.load() << " total messages read";
+      LOG_WARN << static_cast<double>(totalBytesRead.load()) / static_cast<double>(totalMessagesRead.load())
+               << " average message size";
+      LOG_WARN << static_cast<double>(totalBytesRead.load()) / 
+                (static_cast<double>(Timestamp::now().getUsSinceEpoch() - begin.getUsSinceEpoch()) / Timestamp::kUsPerSecond * 1024 * 1024)
+               << " MiB/s throughput";
 }

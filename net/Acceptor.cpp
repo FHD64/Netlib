@@ -32,22 +32,24 @@ void Acceptor::listen() {
 void Acceptor::handleRead() {
     InetAddress peeraddr;
 
-    int connfd = acceptsock_.accpet(&peeraddr);
-    if(connfd >= 0) {
-        if(newconnectioncallback_) {
-            newconnectioncallback_(connfd, peeraddr);
+    while(true) {
+        int connfd = acceptsock_.accpet(&peeraddr);
+        if(connfd >= 0) {
+            if(newconnectioncallback_) {
+                newconnectioncallback_(connfd, peeraddr);
+            } else {
+                ::close(connfd);
+            }
         } else {
-            ::close(connfd);
-        }
-    } else {
-        LOG_SYSERR << "in Acceptor::handlread";
-
-        //当前进程文件描述符已分配完毕，直接关闭
-        if(errno == EMFILE) {
-            ::close(idlefd_);
-            idlefd_ = ::accept(acceptsock_.fd(), NULL, NULL);
-            ::close(idlefd_);
-            idlefd_ = ::open("dev/null", O_RDONLY | O_CLOEXEC);
+            //当前进程文件描述符已分配完毕，直接关闭
+            if(errno == EMFILE) {
+                LOG_SYSERR << "in Acceptor::handlread";
+                ::close(idlefd_);
+                idlefd_ = ::accept(acceptsock_.fd(), NULL, NULL);
+                ::close(idlefd_);
+                idlefd_ = ::open("dev/null", O_RDONLY | O_CLOEXEC);
+            }
+            break;
         }
     }
 }

@@ -41,7 +41,8 @@ EventLoop::EventLoop()
       timerqueue_(new TimerQueue(this)),
       wakeupfd_(createEventfd()),
       wakeupchannel_(new Channel(this, wakeupfd_)),
-      bufferPool_(new BufferPool()) {
+      bufferPool_(new BufferPool()),
+      connectionPool_(new TcpConnectionPool()) {
     if(t_loopInThisThread)
         LOG_FATAL << "Another loop is in this thread";
     else

@@ -312,7 +312,9 @@ void TcpConnection::handleWrite() {
                 }
             }
         }else {
-            LOG_SYSERR << "TcpConnection::handleWrite";
+            if(errno != EAGAIN){
+                LOG_SYSERR << "TcpConnection::handleWrite";
+            }
         }
     }else {
         LOG_TRACE << "Connection is done, fd = " << channel_->fd();
@@ -342,3 +344,23 @@ void TcpConnection::handleError() {
     LOG_ERROR << "TcpConnection::handleError [" << name_ << "] - SO_ERROR = " << err << " " << strerror_r(err, errnobuf, sizeof errnobuf);
 }
 
+void TcpConnection::init(EventLoop* loop, string& name, int sock, InetAddress& localAddr, InetAddress& peerAddr) {
+    loop_ = loop;
+    socket_->setFd(sock);
+    socket_->setKeepAlive(true);
+    channel_->reset(loop, sock);
+    name_ = name;
+    state_ = kConnecting;
+    reading_ = true;
+    localAddr_ = localAddr;
+    peerAddr_ = peerAddr;
+    highWaterMark_ = 64 * 1024 * 1024;
+    if(loop != inputBuffer_.loop()) {
+        inputBuffer_.reset(loop);
+        outputBuffer_.reset(loop);
+    } else {
+        inputBuffer_.retrieve();
+        outputBuffer_.retrieve();
+    }
+    highWaterMarkCallback_ = HighWaterMarkCallback();
+}

@@ -15,6 +15,7 @@ set(NET_SRCS
   Timer.cpp
   TimerQueue.cpp
   BufferPool.cpp
+  TcpConnectionPool.cpp
 )
 
 include_directories(./)
@@ -57,3 +58,6 @@ target_link_libraries(PingPong_Client netlib_net)
 
 add_executable(PingPong_Server ./test/pingpong/PingPong_Server.cpp)
 target_link_libraries(PingPong_Server netlib_net)
+
+add_executable(PingPongShort_Client ./test/pingpong/PingPongShort_Client.cpp)
+target_link_libraries(PingPongShort_Client netlib_net)

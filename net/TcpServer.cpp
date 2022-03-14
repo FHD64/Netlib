@@ -27,10 +27,14 @@ TcpServer::TcpServer(EventLoop* loop, const InetAddress& listenaddr, const strin
 }
 
 TcpServer::~TcpServer() {
-    for(auto& connection : connections_) {
-        TcpConnectionPtr conn(connection.second);
-        connection.second.reset();
-        conn->getLoop()->runInLoop(std::bind(&TcpConnection::connectDestroyed, conn));
+    std::vector<EventLoop*> loops = threadpool_->getAllLoops();
+    for(EventLoop* loop : loops) {
+        Connections* conns = loop->connections();
+        for(auto& connection : *conns) {
+            TcpConnectionPtr conn(connection.second);
+            connection.second.reset();
+            conn->getLoop()->runInLoop(std::bind(&TcpConnection::connectDestroyed, conn));
+        }
     }
 }
 
@@ -42,11 +46,6 @@ void TcpServer::start() {
 }
 
 void TcpServer::newConnectionInLoop(EventLoop* loop, int sockfd, const InetAddress& peeraddr) {
-    
-}
-
-void TcpServer::newConnection(int sockfd, const InetAddress& peeraddr) {
-    EventLoop* ioloop = threadpool_->getLoop();
     char buf[64];
     snprintf(buf, sizeof buf, "-%s#%d", ipPort_.c_str(), nextid_);
     ++nextid_;
@@ -68,13 +67,19 @@ void TcpServer::newConnection(int sockfd, const InetAddress& peeraddr) {
     }
 
     InetAddress addr(localaddr);
-    TcpConnectionPtr conn(new TcpConnection(ioloop, conname, sockfd, addr, peeraddr));
-    connections_[conname] = conn;
+    TcpConnectionPtr conn(loop->alloConnection(loop, conname, sockfd, addr, const_cast<InetAddress&>(peeraddr)), std::bind(&EventLoop::freeConnection, loop, _1));
+    Connections* conns = loop->connections();
+    (*conns)[conname] = conn;
     conn->setConnectionCallback(connectionCallback_);
     conn->setMessageCallback(messageCallback_);
     conn->setWriteCompleteCallback(writeCompleteCallback_);
     conn->setCloseCallback(std::bind(&TcpServer::removeConnection, this, _1));
-    ioloop->runInLoop(std::bind(&TcpConnection::connectEstablished, conn));
+    conn->connectEstablished();
+}
+
+void TcpServer::newConnection(int sockfd, const InetAddress& peeraddr) {
+    EventLoop* ioloop = threadpool_->getLoop();
+    ioloop->runInLoop(std::bind(&TcpServer::newConnectionInLoop, this, ioloop, sockfd, peeraddr));
 }
 
 void TcpServer::removeConnection(const TcpConnectionPtr& conn) {
@@ -87,11 +92,11 @@ void TcpServer::removeConnectionInLoop(const TcpConnectionPtr& conn) {
              << "] - Connection["
              << conn->name()
              << "]";
-    
-    size_t n = connections_.erase(conn->name());
+    EventLoop* ioloop = conn->getLoop();
+    Connections* conns = ioloop->connections();
+    size_t n = conns->erase(conn->name());
     if(n != 1) {
         LOG_SYSERR << "TcpServer::removeConnectionInLoop, erase wrong";
     }
-    EventLoop* ioloop = conn->getLoop();
     ioloop->queueInLoop(std::bind(&TcpConnection::connectDestroyed, conn));
 }

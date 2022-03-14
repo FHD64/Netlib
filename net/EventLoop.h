@@ -15,6 +15,7 @@
 #include "noncopyable.h"
 #include "Poller.h"
 #include "Callback.h"
+#include "TcpConnectionPool.h"
 
 namespace netlib {
 
@@ -68,24 +69,35 @@ class EventLoop : noncopyable {
   boost::any* getMutableContext() {
       return &context_;
   }
+  Connections* connections() {
+      return &connections_;
+  }
 
   BufferBlock* allocate() {
       if(isInLoopThread()) {
           return bufferPool_->allocate();
       }
-      //MutexLock lock(&bufferMutex_);
       return NULL;
   }
   void free(BufferBlock* block) {
       if(!block) {
           return;
       }
-     // if(isInLoopThread()) {
-          bufferPool_->free(block);
+      bufferPool_->free(block);
+  }
+  TcpConnection* alloConnection(EventLoop* loop, string& name, int sock, InetAddress& localAddr, InetAddress& peerAddr) {
+      if(isInLoopThread()) {
+          return connectionPool_->allocate(loop, name, sock, localAddr, peerAddr);
+      }
+      return NULL;
+  }
+  void freeConnection(TcpConnection* conn) {
+      if(isInLoopThread()) {
+          connectionPool_->free(conn);
           return;
-      //}
-      //MutexLock lock(&bufferMutex_);
-      //bufferPool_->free(block);
+      }
+
+      queueInLoop(std::bind(&EventLoop::freeConnectionInLoop, this, conn));
   }
 
   static EventLoop* getEventLoopOfCurrentThread();
@@ -93,6 +105,9 @@ class EventLoop : noncopyable {
  private:
   void handleRead();
   void doPendingFunctors();
+  void freeConnectionInLoop(TcpConnection* conn) {
+      connectionPool_->free(conn);
+  }
   
   typedef std::vector<Channel*> ChannelList;
   std::atomic<bool> looping_;
@@ -107,9 +122,10 @@ class EventLoop : noncopyable {
   
   boost::any context_;
   ChannelList activechannels_;
-
   mutable Mutex mutex_;
   std::vector<Functor> pendingfunctors_;
+  Connections connections_;
+  std::unique_ptr<TcpConnectionPool> connectionPool_;
 };
 
 }

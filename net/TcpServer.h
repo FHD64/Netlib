@@ -60,7 +60,7 @@ class TcpServer : noncopyable {
  private:
   void newConnection(int sockfd, const InetAddress& peeraddr);
   void removeConnectionInLoop(const TcpConnectionPtr& conn);
-  typedef std::map<string, TcpConnectionPtr> Connections;
+  void newConnectionInLoop(EventLoop* loop, int sockfd, const InetAddress& peeraddr);
   EventLoop *loop_;
   const string ipPort_;
   const string name_;
@@ -72,7 +72,6 @@ class TcpServer : noncopyable {
   ThreadInitCallback threadInitCallback_;
   std::atomic<bool> started_;
   int nextid_;
-  Connections connections_;
   Mutex mutex_;
 };
 }

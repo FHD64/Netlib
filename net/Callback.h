@@ -3,9 +3,10 @@
 
 #include <memory>
 #include <functional>
+#include <map>
+#include <string>
 
 namespace netlib {
-
 namespace net {
  class TcpConnection;
  class Connector;
@@ -18,6 +19,7 @@ namespace net {
  typedef std::function<void (const TcpConnectionPtr&, size_t)> HighWaterMarkCallback;
  typedef std::function<void (const TcpConnectionPtr&, Buffer*)> MessageCallback;
  typedef std::function<void()> TimerCallback;
+ typedef std::map<std::string, TcpConnectionPtr> Connections;
 }
 }
 #endif

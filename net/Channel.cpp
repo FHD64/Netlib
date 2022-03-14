@@ -62,3 +62,14 @@ void Channel::update() {
 void Channel::remove() {
       loop_->removeChannel(this);
 }
+
+void Channel::reset() {
+    if(loop_->isInLoopThread() && loop_->hasChannel(this)) {
+        remove();
+    }
+    tied_ = false;
+    events_ = 0;
+    revents_ = 0;
+    loghup_ = true;
+    state_ = -1;
+}
