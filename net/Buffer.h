@@ -8,6 +8,7 @@
 #include <vector>
 #include <string.h>
 #include <sys/uio.h>
+#include <cstring>
 #include <boost/operators.hpp>
 
 namespace netlib {
@@ -15,187 +16,88 @@ namespace net {
 
 class Buffer;
 
-struct BufferIterator : public boost::equality_comparable<BufferIterator>,
-                    public boost::less_than_comparable<BufferIterator> {
- size_t pos_;
- Buffer* buff_;
- BufferIterator() 
-        : pos_(0),
-          buff_(NULL) {
- }
- BufferIterator(size_t pos, Buffer* buff)
-        : pos_(pos),
-          buff_(buff) {
- }
- BufferIterator& operator++() {
-     pos_++;
-     return *this;
- }
- BufferIterator& operator--() {
-     if(pos_ > 0) {
-         pos_--;
-     }
-     return *this;
- }
- inline char& operator*();
+const size_t blockSize = 4096;
+
+struct BufferBlock {
+    struct BufferBlock* next;
+    char* start;
+    char* end;
+    char* pos;
+    char* last;
 };
-
-inline BufferIterator operator-(BufferIterator it, int dis) {
-    it.pos_ -= static_cast<size_t>(static_cast<int>(it.pos_) > dis ? static_cast<int>(it.pos_) - dis : 0);
-    return it;
-}
-
-inline BufferIterator operator+(BufferIterator it, int dis) {
-    it.pos_ += dis;
-    return it;
-}
-
-inline size_t operator-(BufferIterator it1, BufferIterator it2) {
-    if(it1.buff_ != it2.buff_) {
-        return 0;
-    }
-    return it1.pos_ - it2.pos_;
-}
-
-inline bool operator<(BufferIterator it1, BufferIterator it2) {
-    if(it1.buff_ == it2.buff_) {
-        return it1.pos_ < it2.pos_;
-    } 
-    return false;
-}
-
-inline bool operator==(const BufferIterator it1, const BufferIterator it2) {
-    if(it1.buff_ == it2.buff_ && it1.pos_ == it2.pos_) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-inline BufferIterator& operator+=(BufferIterator& it, int dis) {
-    it = it + dis;
-    return it;
-}
-inline BufferIterator& operator-=(BufferIterator& it, int dis) {
-    it = it - dis;
-    return it;
-}
-inline BufferIterator& operator+=(BufferIterator& it, size_t dis) {
-    it = it + static_cast<int>(dis);
-    return it;
-}
-inline BufferIterator& operator-=(BufferIterator& it, size_t dis) {
-    it = it - static_cast<int>(dis);
-    return it;
-}
-inline BufferIterator operator-(BufferIterator it, size_t dis) {
-    it = it - static_cast<int>(dis);
-    return it;
-}
-inline BufferIterator operator+(BufferIterator it, size_t dis) {
-    it = it - static_cast<int>(dis);
-    return it;
-}
 
 class Buffer {
  public:
   explicit Buffer(EventLoop* loop, size_t initsize = blockSize)
     : loop_(loop),
-      size_(0),
-      head_(NULL),
-      writeIdx_(0),
-      readIdx_(0) {
-          int need = static_cast<int>((initsize + blockSize - 1) / blockSize);
-          for(int i = 0; i < need; i++) {
-              BufferBlock* block = loop_->allocate();
-              if(block){
-                  insert(block);
-                  size_ += blockSize;
-              }
-          }
+      block_(NULL) {
+      block_ = loop_->allocate(initsize);
   }
   ~Buffer();
-  BufferIterator begin() {
-      return BufferIterator(readIdx_, this);
-  }
-  BufferIterator end() {
-      return BufferIterator(writeIdx_, this);
-  }
+
   size_t readableBytes() {
-      return writeIdx_ - readIdx_;
+      return block_->last - block_->pos;
   }
   size_t writeableBytes() {
-      return size_ - writeIdx_;
+      return block_->end - block_->last;
   }
-  BufferBlock* head() {
-      return head_;
+  size_t size() {
+      return block_->end - block_->start;
+  }
+  char* peek() {
+      return block_->pos;
   }
 
   void retrieve() {
-      readIdx_ = 0;
-      writeIdx_ = 0;
+      block_->pos = block_->start;
+      block_->last = block_->start; 
+  }
+  string retrieveAsString() {
+      string result(peek(), readableBytes());
+      retrieve();
+      return result;
   }
   EventLoop* loop() {
       return loop_;
   }
-  void retrieveBytes(size_t len);
-  void reset(EventLoop* loop);
-  size_t copyToUser(char* dest, size_t destLen);
-  //写入Buffer
-  void append(const char* data, size_t len);
+
+  void retrieveBytes(size_t bytes) {
+      if(bytes >= readableBytes()) {
+          retrieve();
+          return;
+      }
+
+      block_->pos += bytes;
+  }
+
+  void append(const char* data, size_t dataLen) {
+      if(writeableBytes() < dataLen) {
+          makeSpace(dataLen);
+      }
+
+      ::memcpy(block_->last, data, dataLen);
+      block_->last += dataLen;
+  }
   void append(const StringPiece& str) {
       append(str.data(), str.size());
   }
   void append(const void* data, size_t len) {
       append(static_cast<const char*>(data), len);
   }
-  void append(BufferIterator begin, BufferIterator end);
-  
+  void release() {
+      loop_->free(block_);
+      block_ = NULL;
+  }
+  void reset(EventLoop* loop);
   void shrink(size_t reserve);
   //读取fd存至缓存区
   ssize_t readFd(int fd, int* savedErrno);
-  ssize_t writeFd(int fd);
-  friend struct BufferIterator;
  private:
-  const static int maxIov = 20;
-
-  void insert(BufferBlock* block) {
-      if(!block) {
-          return;
-      }
-      
-      if(!head_) {
-          block->next = block;
-          block->prev = block;
-          head_ = block;
-      } else {
-          head_->prev->next = block;
-          block->prev = head_->prev;
-          block->next = head_;
-          head_->prev = block;
-      }
-  }
-
   void makeSpace(size_t len);
-  size_t makeIov(int* iovsize, size_t begin, size_t end);
   EventLoop* loop_;
-  size_t size_;
-  BufferBlock* head_;
-  size_t writeIdx_;
-  size_t readIdx_;
-  struct ::iovec iov_[maxIov];
+  BufferBlock* block_;
 };
 
-inline char& BufferIterator::operator*() {
-     size_t index = pos_ / blockSize;
-     size_t offset = pos_ % blockSize;
-     BufferBlock* block = buff_->head_;
-     while(index > 0) {
-         block = block->next;
-         index--;
-     }
-     return block->buff[offset];
-}
 }
 }
 #endif

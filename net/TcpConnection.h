@@ -131,9 +131,7 @@ class TcpConnection : noncopyable,
   void handleClose();
   void handleError();
   void sendInLoop(const StringPiece& message);
-  void sendInLoop(Buffer* message);
   void sendInLoop(const void* message, size_t len);
-  void sendInLoopAndFree(const void* data, size_t len);
   void startReadInLoop();
   void stopReadInLoop();
   const char* stateToString() const;

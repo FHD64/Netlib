@@ -73,9 +73,9 @@ class EventLoop : noncopyable {
       return &connections_;
   }
 
-  BufferBlock* allocate() {
+  BufferBlock* allocate(size_t size) {
       if(isInLoopThread()) {
-          return bufferPool_->allocate();
+          return bufferPool_->allocate(size);
       }
       return NULL;
   }

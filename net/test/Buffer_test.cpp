@@ -31,12 +31,8 @@ void testBufferAppendRetrieve() {
     CHECK_EUQAL(buf.readableBytes(), str.size());
     CHECK_EUQAL(buf.writeableBytes(), blockSize - str.size());
 
-    size_t len = 50;
-    char* msg = reinterpret_cast<char*>(malloc(sizeof(char) * len));
-    buf.copyToUser(msg, len);
-    const string str2(msg, len);
+    const string str2(buf.peek(), 50);
     buf.retrieveBytes(50);
-    free(msg);
     CHECK_EUQAL(str2.size(), 50);
     CHECK_EUQAL(buf.readableBytes(), str.size() - str2.size());
     CHECK_EUQAL(buf.writeableBytes(), blockSize - str.size());
@@ -46,12 +42,8 @@ void testBufferAppendRetrieve() {
     CHECK_EUQAL(buf.readableBytes(), 2*str.size() - str2.size());
     CHECK_EUQAL(buf.writeableBytes(), blockSize- 2 * str.size());
 
-    len = buf.readableBytes();
-    msg = reinterpret_cast<char*>(malloc(sizeof(char) * len));
-    buf.copyToUser(msg, len);
-    const string str3(msg,len);
+    const string str3(buf.peek(), buf.readableBytes());
     buf.retrieve();
-    free(msg);
     CHECK_EUQAL(str3.size(), 350);
     CHECK_EUQAL(buf.readableBytes(), 0);
     CHECK_EUQAL(buf.writeableBytes(), blockSize);
@@ -92,10 +84,7 @@ void testBufferShrink() {
   CHECK_EUQAL(buf.readableBytes(), 500);
   CHECK_EUQAL(buf.writeableBytes(), 1072);
 
-  size_t len = buf.readableBytes();
-  char* msg = reinterpret_cast<char*>(malloc(sizeof(char) * len));
-  buf.copyToUser(msg, len);
-  const string str3(msg, len);
+  const string str3(buf.peek(), buf.readableBytes());
   CHECK_EUQAL(str3, string(500, 'y'));
 }
 

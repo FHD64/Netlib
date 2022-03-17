@@ -24,6 +24,8 @@ TcpConnection* TcpConnectionPool::allocate(EventLoop* loop, std::string& name, i
  void TcpConnectionPool::free(TcpConnection* conn) {
      conn->socket_->reset();
      conn->channel_->reset();
+     conn->inputBuffer_.release();
+     conn->outputBuffer_.release();
      connections_.push_back(conn);
      size_++;
  }

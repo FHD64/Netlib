@@ -46,19 +46,16 @@ class EchoClient : noncopyable {
 
   void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
       size_t len = buf->readableBytes();
-      char* msg = reinterpret_cast<char*>(malloc(sizeof(char) * len + 1));
-      buf->copyToUser(msg, len);
-      msg[len] = '\0';
+      std::string msg = buf->retrieveAsString();
       LOG_TRACE << conn->name() << " recv " << len << " bytes at " << msg;
-      if (!strcmp(msg, "exit\n")) {
+      if (msg == "exit\n") {
           conn->send("bye\n");
           conn->shutdown();
-      } else if (!strcmp(msg, "shutdown\n")) {
+      } else if (msg == "shutdown\n") {
           loop_->quit();
       } else {
           conn->send(msg);
       }
-      free(msg);
   }
 
   EventLoop* loop_;

@@ -8,31 +8,23 @@
 namespace netlib {
 namespace net {
 
-//对齐BufferBlock
-const size_t blockSize = 4096;
-
-struct BufferBlock {
-    struct BufferBlock* next;
-    struct BufferBlock* prev;
-    char buff[blockSize];
-};
-
+struct BufferBlock;
 class BufferPool : noncopyable {
  public:
   BufferPool();
   ~BufferPool();
   
-  BufferBlock* allocate();
+  BufferBlock* allocate(size_t size);
   void free(BufferBlock* buff);
 
-  int memUsage() {
+  size_t memUsage() {
       return memUsage_.load();
   }
  private:
-  void fillPool();
-  std::atomic<int> memUsage_;
-  BufferBlock* head_;
-  std::vector<BufferBlock*> blocks_;
+  void fillPool(size_t size);
+  std::atomic<size_t> memUsage_;
+  std::vector<BufferBlock*> heads_;
+  std::vector<char*> blocks_;
 };
 }
 }

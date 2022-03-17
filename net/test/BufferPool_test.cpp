@@ -9,6 +9,7 @@ using namespace netlib::net;
 
 int allocateNum = 100000;
 int threadNum = 5;
+int size = 4096;
 CountDownLatch count(threadNum);
 CountDownLatch count1(threadNum);
 std::atomic<long int> allocatetime(0);
@@ -22,7 +23,7 @@ void allocateBuffer(EventLoop* loop) {
     printf("BufferPool start allocate : %s , tid : %d \n", start.toString().c_str(), CurrentThread::tid());
     
     for(int i = 0; i < allocateNum; i++) {
-        blocks.push_back(loop->allocate());
+        blocks.push_back(loop->allocate(size));
     }
     printf("BufferPool end allocate : %s , tid : %d \n", Timestamp::now().toString().c_str(), CurrentThread::tid());
     allocatetime += Timestamp::now().getUsSinceEpoch()-start.getUsSinceEpoch();
@@ -46,7 +47,7 @@ void mallocBuffer(EventLoop* loop) {
     printf("malloc start allocate : %s , tid : %d \n", Timestamp::now().toString().c_str(), CurrentThread::tid());
     
     for(int i = 0; i < allocateNum; i++) {
-        blocks.push_back(reinterpret_cast<BufferBlock*>(malloc(sizeof(BufferBlock))));
+        blocks.push_back(reinterpret_cast<BufferBlock*>(malloc(size * sizeof(char))));
     }
     printf("malloc end allocate : %s , tid : %d \n", Timestamp::now().toString().c_str(), CurrentThread::tid());
     malloctime += Timestamp::now().getUsSinceEpoch()-start.getUsSinceEpoch();

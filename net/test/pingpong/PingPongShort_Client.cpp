@@ -17,7 +17,6 @@ using namespace netlib::net;
 using namespace std::placeholders;
 
 class Client;
-int testnum = 0;
 std::atomic<int64_t> totalBytesRead(0);
 std::atomic<int64_t> totalMessagesRead(0);
 class Session : noncopyable {
@@ -76,7 +75,7 @@ class Client : noncopyable
          const InetAddress& serverAddr,
          int blockSize,
          int sessionCount,
-         int timeout,
+         double timeout,
          int threadCount)
     : loop_(loop),
       threadPool_(loop, "pingpong-client"),
@@ -152,7 +151,7 @@ class Client : noncopyable
   EventLoop* loop_;
   EventLoopThreadPool threadPool_;
   int sessionCount_;
-  int timeout_;
+  double timeout_;
   std::vector<std::unique_ptr<Session>> sessions_;
   string message_;
   std::atomic<int> numConnected_;
@@ -181,9 +180,8 @@ int main(int argc, char* argv[])
     int threadCount = atoi(argv[2]);
     int blockSize = atoi(argv[3]);
     int sessionCount = atoi(argv[4]);
-    int timeout = atoi(argv[5]);
-    int testtime = atoi(argv[6]);
-    testnum = testtime / timeout;
+    double timeout = atof(argv[5]);
+    int testnum = atoi(argv[6]);
     EventLoop loop;
     InetAddress serverAddr("0.0.0.0", port);
     Timestamp begin(Timestamp::now());
