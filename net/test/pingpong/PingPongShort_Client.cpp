@@ -113,7 +113,7 @@ class Client : noncopyable
   {
     if (++numConnected_ == sessionCount_)
     {
-      LOG_WARN << "all connected";
+      //LOG_WARN << "all connected";
     }
   }
 
@@ -121,7 +121,7 @@ class Client : noncopyable
   {
     if (--numConnected_ == 0)
     {
-      LOG_WARN << "all disconnected";
+      //LOG_WARN << "all disconnected";
 
       for (const auto& session : sessions_)
       {
@@ -141,7 +141,7 @@ class Client : noncopyable
 
   void handleTimeout()
   {
-    LOG_WARN << "stop";
+    //LOG_WARN << "stop";
     for (auto& session : sessions_)
     {
       session->stop();
