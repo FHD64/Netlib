@@ -12,11 +12,13 @@ reactor模式采用的也是计算机领域的一个常见的思想————�
 1. poller等待事件发生，读/写/错误(通常使用epoll/select/poll)  
 2. 将事件及事件处理器(event handler)分发(dispatch)给相应的处理线程  
 3. 相应线程完成事件处理(调用event handler)，可能会注册/注销poller中的事件，再返回至步骤1  
+
 我认为另一种经常提到的proactor模式与reactor模式最大的不同在于对IO事件的处理顺序不同，但本质上都是利用了中断思想，举例来讲：  
 reactor处理读事件是：  
 1. 内核通知用户事件可读  
 2. 调用read()  
 3. 等待read完成后进行相应处理  
+
 proactor处理读事件是：  
 1. 调用read()不等待直接返回  
 2. 内核处理read  
